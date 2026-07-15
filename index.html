@@ -64,6 +64,38 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .footer { padding: 14px 28px; background: #fafafa; border-top: 1px solid var(--line); text-align: center; font-size: 11px; color: #9a9a9a; letter-spacing: 0.02em; }
     a { color: var(--ink); }
+
+    /* ── Checkout-success view ───────────────────────────────────────────
+       A dedicated celebratory confirmation shown ONLY on the Dodo return_url
+       (?checkout=success). It REPLACES the invite shell (the checkout branch
+       hides #invite-view and reveals #checkout-view) rather than rendering
+       inside the shared card, so every selector here is scoped to
+       #checkout-view / #confetti / .co-* and the minimal invite palette above
+       is left completely untouched. */
+    #confetti { display: block; position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+    #checkout-view { position: relative; z-index: 2; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 16px; }
+    .co-stack { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 420px; }
+    .co-badge-shell { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; z-index: 6; margin-bottom: -36px; opacity: 0; transform: scale(0.4); animation: co-badge-pop 520ms cubic-bezier(.26,1.55,.44,1) 120ms forwards; }
+    .co-badge { width: 72px; height: 72px; border-radius: 50%; background: var(--ok); display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px -4px rgba(22,131,75,0.5), 0 6px 24px rgba(15,15,15,0.08); }
+    .co-badge svg { width: 32px; height: 32px; }
+    @keyframes co-badge-pop { 0% { opacity: 0; transform: scale(0.3) rotate(-8deg); } 60% { opacity: 1; transform: scale(1.08) rotate(2deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
+    .co-card { width: 100%; background: var(--card); border-radius: var(--radius); border: 1px solid var(--line); box-shadow: 0 10px 40px rgba(15,15,15,0.08), 0 2px 8px rgba(15,15,15,0.04); padding-top: 46px; overflow: hidden; text-align: center; opacity: 0; transform: translateY(10px) scale(0.98); animation: co-card-in 420ms ease-out forwards; }
+    @keyframes co-card-in { to { opacity: 1; transform: translateY(0) scale(1); } }
+    .co-section { padding: 18px 32px; }
+    .co-section + .co-section { border-top: 1px solid var(--line); }
+    #checkout-view h1 { margin: 0 0 10px; font-size: 22px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.25; }
+    .co-reveal { opacity: 0; transform: translateY(8px); animation: co-reveal-in 460ms ease-out forwards; }
+    @keyframes co-reveal-in { to { opacity: 1; transform: translateY(0); } }
+    .co-btn-row { display: flex; }
+    .co-hint { display: none; margin: 12px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .co-hint.show { display: block; }
+    .co-hint kbd { font-family: inherit; font-size: 11.5px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; }
+    .co-brand { position: fixed; left: 0; right: 0; bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 11.5px; color: var(--muted); letter-spacing: 0.02em; }
+    .co-brand svg { width: 15px; height: 15px; flex: none; border-radius: 3.5px; }
+    .co-brand b { color: var(--ink); font-weight: 600; }
+    @media (prefers-reduced-motion: reduce) {
+      .co-badge-shell, .co-card, .co-reveal { animation: none !important; opacity: 1 !important; transform: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -76,7 +108,7 @@
     signout-link, status, resolved-title, resolved-body) so the
     existing module script keeps working unchanged.
   -->
-  <div class="wrap">
+  <div class="wrap" id="invite-view">
     <main class="card" role="main">
 
       <!-- Loading / not-found / expired / resolved / rejected:
@@ -191,22 +223,6 @@
         </div>
       </div>
 
-      <!-- Checkout success: Dodo's post-payment return_url lands here (this
-           page is the only public site we control). Purely informational —
-           a webpage cannot open a Chrome extension's side panel, so the
-           easy/honest path is telling the user to go back to it, not
-           pretending a button here can summon it. No Supabase calls: this
-           state must render even if the DB/session is unreachable. -->
-      <div id="checkout-success" class="hidden">
-        <div class="section">
-          <h1>You're on Notate Pro 🎉</h1>
-          <p class="lead">Your subscription is active<span id="checkout-email-wrap"> for <strong id="checkout-email"></strong></span>. Go back to the tab where Notate is open — or click the Notate icon on any page — to see your Pro status in Settings → Billing.</p>
-        </div>
-        <div class="section">
-          <p class="status ok" style="margin:0;">You can close this tab.</p>
-        </div>
-      </div>
-
       <!-- No-extension state: the public link was opened in a browser without
            the Notate extension. Primary CTA installs it; the secondary link
            drops into the in-page sign-in flow as a fallback for non-Chrome
@@ -230,6 +246,52 @@
 
       <div class="footer">Notate · Visual feedback for the web</div>
     </main>
+  </div>
+
+  <!-- Checkout-success view — a dedicated, celebratory confirmation for the
+       Dodo post-payment return_url. Hidden until the checkout branch in the
+       module script reveals it (and hides #invite-view above). No Supabase
+       calls: it renders even if the DB or session is unreachable. The confetti
+       canvas is a page-level overlay, also revealed only for this state. -->
+  <canvas id="confetti" class="hidden"></canvas>
+  <div id="checkout-view" class="hidden">
+    <div class="co-stack">
+      <div class="co-badge-shell">
+        <div class="co-badge">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 12.5L9.5 17L19 7" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <main class="co-card" role="main">
+        <div class="co-section co-reveal" style="animation-delay:220ms;">
+          <h1>Upgrade complete</h1>
+          <p class="lead">Notate Pro is active<span id="checkout-email-wrap"> for <strong id="checkout-email"></strong></span>.</p>
+        </div>
+        <div class="co-section co-reveal" style="animation-delay:340ms;">
+          <p class="lead">Click the Notate icon in your toolbar — Pro is already there.</p>
+        </div>
+        <div class="co-section co-reveal" style="animation-delay:460ms;">
+          <div class="co-btn-row">
+            <button id="checkout-done-btn" class="btn primary">Done</button>
+          </div>
+          <p class="co-hint" id="checkout-close-hint">Chrome kept this tab open — close it with <kbd>⌘W</kbd> / <kbd>Ctrl+W</kbd>.</p>
+        </div>
+      </main>
+    </div>
+    <div class="co-brand co-reveal" style="animation-delay:560ms;">
+      <svg viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="180" height="180" rx="39.375" fill="#3A1EFD"/>
+        <mask id="co-logo-mask" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="180" height="180">
+          <rect width="180" height="180" rx="39.375" fill="#3A1EFD"/>
+        </mask>
+        <g mask="url(#co-logo-mask)">
+          <rect x="36.002" y="164.251" width="108" height="108" rx="16.875" fill="#DCE5F5"/>
+        </g>
+        <path d="M63.6635 135.865C59.4635 135.865 56.2715 134.563 54.0875 131.959C51.9035 129.355 50.8115 125.869 50.8115 121.501V62.4068C50.8115 58.0388 51.6095 54.5108 53.2055 51.8228C54.8855 49.0508 57.0275 47.0348 59.6315 45.7748C62.3195 44.5148 65.2175 43.8848 68.3255 43.8848C72.9455 43.8848 76.8515 45.1028 80.0435 47.5388C83.2355 49.9748 85.7135 54.2588 87.4775 60.3908L101.086 106.885H103.102V58.5008C103.102 54.0488 104.236 50.5628 106.504 48.0428C108.772 45.4388 112.006 44.1368 116.206 44.1368C120.574 44.1368 123.808 45.4388 125.908 48.0428C128.092 50.5628 129.184 54.0488 129.184 58.5008V115.453C129.184 122.509 127.63 127.717 124.522 131.077C121.414 134.437 117.046 136.117 111.418 136.117C105.706 136.117 101.254 134.605 98.0615 131.581C94.8695 128.557 92.4335 124.105 90.7535 118.225L81.8075 87.6068C81.6395 86.7668 81.3035 86.0108 80.7995 85.3388C80.3795 84.5828 79.7915 84.2048 79.0355 84.2048C78.1115 84.2048 77.4815 84.5828 77.1455 85.3388C76.8095 86.0108 76.6415 86.7668 76.6415 87.6068V121.501C76.6415 125.869 75.5495 129.355 73.3655 131.959C71.1815 134.563 67.9475 135.865 63.6635 135.865Z" fill="white"/>
+      </svg>
+      <b>Notate</b>&nbsp;· Visual feedback for the web
+    </div>
   </div>
 
   <!--
@@ -274,8 +336,251 @@
     })();
 
     const $ = (id) => document.getElementById(id);
-    const show = (id) => { for (const k of ["loading","not-found","expired","resolved","sign-in","confirm","done","rejected","ext-handoff","no-extension","checkout-success"]) $(k).classList.toggle("hidden", k !== id); };
+    const show = (id) => { for (const k of ["loading","not-found","expired","resolved","sign-in","confirm","done","rejected","ext-handoff","no-extension"]) $(k).classList.toggle("hidden", k !== id); };
     const setStatus = (msg, kind) => { const el = $("status"); el.textContent = msg || ""; el.className = "status" + (kind ? " " + kind : ""); };
+
+    // ─── Checkout-success enhancements (confetti + Done button) ─────────
+    // Declared as a function so the terminal checkout branch can call it
+    // before the module's Supabase setup runs (which it never does for a
+    // payment return_url — the branch throws first).
+    function initCheckoutSuccess() {
+      const doneBtn = $("checkout-done-btn");
+      if (doneBtn) {
+        doneBtn.addEventListener("click", () => {
+          // Tier 1: ask the extension to close this tab — authoritative and
+          // independent of tab history. Harmless "unknown_type" reply today;
+          // becomes the reliable path once the service worker ships a
+          // NOTATE_CHECKOUT_DONE handler, with no redeploy of this page.
+          try {
+            if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage && !CFG.EXTENSION_ID.startsWith("REPLACE_")) {
+              chrome.runtime.sendMessage(CFG.EXTENSION_ID, { type: "NOTATE_CHECKOUT_DONE" }, () => { void chrome.runtime.lastError; });
+            }
+          } catch { /* extension absent */ }
+          // Tier 2: self-close. Chrome permits this for a tab opened via
+          // chrome.tabs.create whose history has a single entry.
+          try { window.close(); } catch {}
+          // Tier 3: still here a beat later -> Chrome refused; show the hint.
+          setTimeout(() => { const h = $("checkout-close-hint"); if (h) h.classList.add("show"); }, 250);
+        });
+      }
+      // Realistic paper-confetti burst. Skips itself under reduced motion.
+      runConfetti();
+    }
+
+    function runConfetti() {
+
+  // 11. Reduced motion: draw nothing, return immediately.
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  var canvas = document.getElementById('confetti');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // ---------- Canvas / DPR (10) ----------
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var vw = 0, vh = 0;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    vw = window.innerWidth;
+    vh = window.innerHeight;
+    canvas.width = Math.round(vw * DPR);
+    canvas.height = Math.round(vh * DPR);
+    canvas.style.width = vw + 'px';
+    canvas.style.height = vh + 'px';
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // ---------- Origin (7) ----------
+  var ox = window.innerWidth / 2;
+  var oy = window.innerHeight / 2 - 100;
+  var badge = document.querySelector('.co-badge-shell');
+  if (badge) {
+    var br = badge.getBoundingClientRect();
+    if (br.width > 0 || br.height > 0) {
+      ox = br.left + br.width / 2;
+      oy = br.top + br.height / 2;
+    }
+  }
+
+  // ---------- Palette (12): brand purple + festive mids that read on #f4f4f2 and #131313 ----------
+  var PALETTE = [
+    '#3A1EFD', // Notate brand purple
+    '#17A85B', // festive green
+    '#F5A31C', // warm gold
+    '#FF5D47', // coral
+    '#1F9CE8', // sky blue
+    '#E0447F'  // raspberry
+  ];
+  // 2. Precompute darkened back-face variants once (no per-frame color parsing).
+  function darken(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    var r = ((n >> 16) & 255) * 0.55 | 0;
+    var g = ((n >> 8) & 255) * 0.55 | 0;
+    var b = (n & 255) * 0.55 | 0;
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+  var DARK = [];
+  var pi;
+  for (pi = 0; pi < PALETTE.length; pi++) DARK.push(darken(PALETTE[pi]));
+
+  // ---------- Pieces (pre-created; zero allocation inside the frame loop) ----------
+  var TAU = Math.PI * 2;
+  var COUNT = 150;            // 8. within 120-160
+  var MAIN_COUNT = 105;       // main burst at t=0
+  var SECONDARY_DELAY = 180;  // smaller secondary burst ~180ms later for depth
+  var pieces = new Array(COUNT);
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  function makePiece(secondary) {
+    var ribbon = Math.random() < 0.30; // 5. ~30% ribbons/streamers
+    var ci = (Math.random() * PALETTE.length) | 0;
+
+    // 6. Radial burst with variance + slight upward bias so pieces arc over the card.
+    var ang = Math.random() * TAU;
+    var speed = secondary ? rand(8, 15) : rand(12, 24);
+    if (ribbon) speed *= 0.85; // paper strips catch air sooner
+    var vx = Math.cos(ang) * speed;
+    var vy = Math.sin(ang) * speed - rand(2.5, 6.5); // upward kick
+
+    return {
+      ribbon: ribbon,
+      x: ox, y: oy,
+      vx: vx, vy: vy,
+      delay: secondary ? SECONDARY_DELAY : 0,
+      life: rand(2800, 3600),                          // 9. lifetime
+      burstMs: rand(280, 420),                         // burst -> float handoff
+      burstDrag: rand(0.90, 0.94),                     // 6. heavy drag in burst phase
+      grav: ribbon ? rand(0.055, 0.095) : rand(0.10, 0.16),
+      term: ribbon ? rand(1.0, 1.7) : rand(1.9, 3.1),  // 4. per-piece terminal speed
+      // 3. flutter: unique phase + frequency, layered on velocity
+      flutPhase: Math.random() * TAU,
+      flutFreq: rand(0.0035, 0.0085),                  // rad per ms
+      flutAmp: ribbon ? rand(0.9, 1.7) : rand(0.3, 0.8),
+      // 1. pseudo-3D tumble
+      tilt: Math.random() * TAU,
+      tiltSpeed: (Math.random() < 0.5 ? -1 : 1) * (ribbon ? rand(0.06, 0.14) : rand(0.13, 0.30)),
+      rot: Math.random() * TAU,
+      rotSpeed: rand(-0.09, 0.09),
+      // geometry: varied rectangle aspect vs long thin ribbon
+      w: ribbon ? rand(3.5, 5.5) : rand(6, 13),
+      h: ribbon ? 0 : rand(4, 9),
+      len: ribbon ? rand(20, 34) : 0,
+      // ribbon bend oscillation
+      bend: Math.random() * TAU,
+      bendSpeed: rand(0.08, 0.2),
+      bendAmp: rand(2, 4.5),
+      rock: 0,
+      color: PALETTE[ci],
+      dark: DARK[ci]
+    };
+  }
+
+  var i;
+  for (i = 0; i < COUNT; i++) pieces[i] = makePiece(i >= MAIN_COUNT);
+
+  // ---------- Single rAF loop; stops when every piece is dead (9, 13) ----------
+  var startTs = -1;
+  var lastTs = -1;
+
+  function frame(ts) {
+    if (startTs < 0) { startTs = ts; lastTs = ts; }
+    var dtms = Math.min(ts - lastTs, 48); // clamp tab-switch spikes
+    lastTs = ts;
+    var dt = dtms / 16.667;               // normalized 60fps step
+
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0); // 10. no cumulative transform drift
+    ctx.clearRect(0, 0, vw, vh);
+
+    var alive = 0;
+    var elapsed = ts - startTs;
+    var j, p, d, age, t, alpha, f, cosT, hh, wRib, seg, s;
+
+    for (j = 0; j < COUNT; j++) {
+      p = pieces[j];
+      age = elapsed - p.delay;
+      if (age < 0) { alive++; continue; } // secondary burst still pending
+      if (age >= p.life) continue;
+      alive++;
+
+      // --- physics ---
+      if (age < p.burstMs) {
+        // burst phase: violent outward energy bleeding off fast
+        d = Math.pow(p.burstDrag, dt);
+        p.vx *= d;
+        p.vy *= d;
+      } else {
+        // float phase: gentle sideways air resistance
+        p.vx *= Math.pow(0.985, dt);
+      }
+      p.vy += p.grav * dt;
+      if (p.vy > p.term) p.vy = p.term;   // 4. terminal velocity clamp -> float, not plummet
+
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      // 3. sinusoidal side-to-side drift on top of ballistic motion
+      p.x += Math.sin(age * p.flutFreq + p.flutPhase) * p.flutAmp * dt;
+
+      p.tilt += p.tiltSpeed * dt;
+      p.rot += p.rotSpeed * dt;
+      p.bend += p.bendSpeed * dt;
+      // rocking: couple the flutter phase into orientation so pieces
+      // visibly seesaw as they sway, not just translate side to side
+      p.rock = Math.cos(age * p.flutFreq + p.flutPhase) * 0.32;
+
+      // --- alpha: smooth fade over final 25% of life (9) ---
+      t = age / p.life;
+      if (t > 0.75) {
+        f = (t - 0.75) * 4;
+        alpha = 1 - f * f * (3 - 2 * f); // smoothstep out
+      } else {
+        alpha = 1;
+      }
+
+      // --- render ---
+      cosT = Math.cos(p.tilt);
+      ctx.globalAlpha = alpha;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot + p.rock);
+      if (p.ribbon) {
+        // 5. wavy multi-segment streamer; width folds with the tumble
+        wRib = p.w * (0.3 + 0.7 * Math.abs(cosT));
+        ctx.strokeStyle = cosT < 0 ? p.dark : p.color; // 2. darker back face
+        ctx.lineWidth = wRib;
+        ctx.beginPath();
+        seg = p.len / 4;
+        ctx.moveTo(Math.sin(p.bend) * p.bendAmp, -p.len / 2);
+        for (s = 1; s <= 4; s++) {
+          ctx.lineTo(Math.sin(p.bend + s * 1.6) * p.bendAmp, -p.len / 2 + seg * s);
+        }
+        ctx.stroke();
+      } else {
+        // 1. rectangle folds to a sliver and back as it flips over
+        hh = p.h * Math.abs(cosT);
+        if (hh < 0.6) hh = 0.6; // keep a hairline edge visible at full fold
+        ctx.fillStyle = cosT < 0 ? p.dark : p.color;   // 2. darker back face
+        ctx.fillRect(-p.w / 2, -hh / 2, p.w, hh);
+      }
+      ctx.restore();
+    }
+
+    ctx.globalAlpha = 1;
+
+    if (alive > 0) {
+      requestAnimationFrame(frame);
+    } else {
+      // all pieces dead: final clear, tear down, no perpetual loop
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.clearRect(0, 0, vw, vh);
+      window.removeEventListener('resize', resize);
+    }
+  }
+
+  requestAnimationFrame(frame);
+    }
 
     // Dodo's post-checkout return_url lands here with no token/code — it's
     // a payment confirmation, not an invite. Must run before the `!mode`
@@ -284,7 +589,12 @@
       const email = params.get("email");
       if (email) { $("checkout-email").textContent = email; }
       else { $("checkout-email-wrap").classList.add("hidden"); }
-      show("checkout-success");
+      // Swap the shared invite shell out for the dedicated checkout view,
+      // then reveal the confetti overlay and wire up the "Done" button.
+      $("invite-view").classList.add("hidden");
+      $("checkout-view").classList.remove("hidden");
+      $("confetti").classList.remove("hidden");
+      initCheckoutSuccess();
       throw new Error("checkout-success terminal state");
     }
 
